@@ -1,0 +1,42 @@
+.face-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+.registration-camera video {
+  object-fit: contain;
+}
+.excel-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border: 1px solid #bacef714;
+  border-radius: 8px;
+  color: #8099ba;
+  font-size: 11px;
+  line-height: 20px;
+}
+.excel-synced {
+  color: #92b8a9;
+}
+.excel-error {
+  color: #c3ad85;
+  border-color: #c3ad8525;
+}
+.storage-warning .text-button {
+  margin-left: 12px;
+  color: #c8d9f0;
+}
+@media (max-width: 640px) {
+  .excel-status {
+    align-items: flex-start;
+    font-size: 10px;
+    flex-wrap: wrap;
+  }
+}

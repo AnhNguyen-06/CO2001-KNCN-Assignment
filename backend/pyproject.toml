@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "presence-cv"
+version = "0.1.0"
+description = "Standalone YuNet/SFace attendance baseline for Presence"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "numpy>=2.1,<3",
+  "opencv-python>=4.10,<5",
+  "openpyxl>=3.1,<4",
+  "Pillow>=11,<14",
+  "tzdata>=2025.1",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9", "httpx>=0.28,<1"]
+
+[project.scripts]
+presence-cv = "presence_cv.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["presence_cv*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--basetemp=var/pytest"
+markers = ["models: requires downloaded ONNX models and public verification images"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B"]

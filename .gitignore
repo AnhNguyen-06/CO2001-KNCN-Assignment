@@ -1,0 +1,19 @@
+# Local Python runtime and biometric/attendance data
+backend/.venv/
+backend/var/
+backend/models/*.onnx
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+.env.*
+!.env.example
+
+# Frontend build products and local test output
+frontend/node_modules/
+frontend/.next/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
