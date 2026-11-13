@@ -71,10 +71,10 @@ export function Attendance() {
     for (const event of value.events) {
       if (event.kind === "attendance_created") {
         notify(event.message);
-        void refresh();
+        void refresh(true);
       } else if (event.kind === "attendance_already_exists") {
         notify(event.message, "info");
-        void refresh();
+        void refresh(true);
       } else if (
         event.kind === "attendance_failed" ||
         event.kind === "excel_failed"
@@ -392,11 +392,13 @@ export function Attendance() {
           role="status"
         >
           <span>
-            {exportState.status === "synced"
-              ? "Daily Excel file is up to date."
-              : exportState.status === "pending"
-                ? "Attendance saved. Updating the daily Excel file…"
-                : "Attendance saved. Daily Excel update needs a retry."}
+            {exportState.status === "available"
+              ? "Attendance saved. Excel is ready to download."
+              : exportState.status === "synced"
+                ? "Daily Excel file is up to date."
+                : exportState.status === "pending"
+                  ? "Attendance saved. Updating the daily Excel file…"
+                  : "Attendance saved. Daily Excel update needs a retry."}
           </span>
           {exportState.status === "error" && (
             <button

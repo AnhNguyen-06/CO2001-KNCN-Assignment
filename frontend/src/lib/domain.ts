@@ -18,7 +18,7 @@ export type ExportState = {
   attendance_date: string;
   data_revision: number;
   exported_revision: number;
-  status: "synced" | "pending" | "error";
+  status: "synced" | "pending" | "error" | "available";
   last_error: string | null;
 };
 export type Preferences = {

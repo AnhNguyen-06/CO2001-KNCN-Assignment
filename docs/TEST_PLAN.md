@@ -4,11 +4,23 @@
 
 Bản FE–CV đã tích hợp. Kết quả tự động và phạm vi xác minh được ghi dưới đây; các bảng hiện trường còn chờ nhóm đăng ký và thử thật.
 
-## Kết quả bản tích hợp FE–CV
+## Bổ sung deployment miễn phí
+
+Đã kiểm tra 62/62 bài backend với PostgreSQL 17 thật trong Docker cùng các bài SQLite cũ. Sáu bài mới bao phủ embedding BYTEA/Unicode/ID số 0 đầu, restart, đăng ký rollback, 16 request điểm danh đồng thời, đổi ngày, revision và API CV→PostgreSQL→Excel download. Có một deprecation warning upstream Starlette/httpx như bản trước.
+
+Docker Linux build thành công từ backend/Dockerfile, dùng OpenCV headless và model checksum cố định. Container giới hạn 0.1 CPU/512 MB chạy 8 frame probe khác ảnh đăng ký, processing_ms lần lượt 812.87,661.04,864.83,573.77,678.18,752.99,694.86,766.76. Đăng ký mất 4.53s, ghi đúng 1 attendance event và 1 record. Bộ nhớ quan sát sau lượt thử 184.6 MiB/512 MiB. Đây là mô phỏng tài nguyên local, cần đo mạng/CPU chia sẻ Render thực sau deploy.
+
+Browser end-to-end trên Next production + Docker Linux 0.1 CPU/512 MB + PostgreSQL thật đạt 9/9 trong 2.8 phút. Gồm đăng ký qua native fake camera và model thật, liên tục 60s chỉ 1 bản ghi, người lạ/no-face, download workbook text-safe, persistence sau xóa localStorage, daily duplicate, camera/Excel/service errors, tự kết nối lại sau cold-start 503 và responsive. Database test riêng, không ghi vào DB local của nhóm.
+
+TypeScript typecheck, Next production build, Ruff và Docker runtime dependency check được chạy theo hướng dẫn. Bản cloud chưa được deploy vào tài khoản Render/Neon của chủ dự án. Hướng dẫn và tiêu chí nghiệm thu ở DEPLOYMENT.
+
+Hồi quy browser SQLite local cũng đạt 9/9 trong 2.2 phút, gồm cold start trả trang HTML và tự khôi phục. Đã restart container API và đối chiếu dữ liệu PostgreSQL sau khởi động lại. Các lượt này dùng database test riêng.
+
+## Kết quả bản tích hợp FE–CV trước bổ sung cloud (lịch sử)
 
 Môi trường Windows, Python 3.13, Node 24, Chrome/Playwright; actual YuNet/SFace ONNX. Backend suite: **56/56 pass**, gồm 8 API tests mới bên cạnh 48 baseline tests. Có một deprecation warning upstream từ Starlette TestClient/httpx, không ảnh hưởng runtime.
 
-API tests kiểm tra DB trống, đăng ký tên Unicode/ID0đầu, retry idempotent/conflict, no-face, ba ảnh khác danh tính, CV→commit→Excel, restart, người lạ, phiên dừng/hết hạn, hai browser tracker độc lập, payload limit, server key và hủy trong lúc inference.
+API tests kiểm tra DB trống, đăng ký tên Unicode/ID số 0 đầu, retry idempotent/conflict, no-face, ba ảnh khác danh tính, CV→commit→Excel, restart, người lạ, phiên dừng/hết hạn, hai browser tracker độc lập, payload limit, server key và hủy trong lúc inference.
 
 Browser suite mới thay bộ test mock bằng 8 bài end-to-end với hai server riêng 8001/3100 và SQLite mới mỗi lượt. Chrome phát video portrait công khai qua native fake camera; CV không bị mock. Bao phủ đăng ký 3 mẫu, save/reload, actual check-in/overlay, media cleanup, localStorage clear vẫn giữ dữ liệu, daily duplicate, Excel thật (đọc workbook và đối chiếu ID/tên/status), kiểm tra trực tiếp SQLite counts 1 person / 3 samples / 1 attendance, legacy mock data không import, unknown/no-face, permission denied, service outage/retry, reset preferences và responsive 390px.
 

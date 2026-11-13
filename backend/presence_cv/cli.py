@@ -2,6 +2,7 @@ import argparse
 from dataclasses import asdict
 from datetime import date as Date
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -9,6 +10,7 @@ import time
 
 import cv2
 import numpy as np
+import psycopg
 
 from .camera import LatestFrames
 from .config import Config, Paths
@@ -44,7 +46,9 @@ def parser():
         description="Presence standalone YuNet/SFace attendance baseline"
     )
     root.add_argument("--config", type=Path, help="Configuration JSON path")
-    root.add_argument("--data-dir", type=Path, default=Paths().data_dir)
+    root.add_argument(
+        "--data-dir", type=Path, default=Path(os.environ.get("PRESENCE_DATA_DIR", Paths().data_dir))
+    )
     root.add_argument("--model-dir", type=Path, default=Paths().model_dir)
     commands = root.add_subparsers(dest="command", required=True)
     commands.add_parser("setup-models", help="Download and verify pinned ONNX model files")
@@ -192,7 +196,11 @@ def main(argv=None):
     arguments = parser().parse_args(argv)
     try:
         config = Config.load(arguments.config)
-        paths = Paths(arguments.model_dir.resolve(), arguments.data_dir.resolve())
+        paths = Paths(
+            arguments.model_dir.resolve(),
+            arguments.data_dir.resolve(),
+            database_url=os.environ.get("DATABASE_URL", "").strip() or None,
+        )
         if arguments.command == "setup-models":
             emit(
                 {
@@ -203,7 +211,9 @@ def main(argv=None):
             )
             return 0
         if arguments.command in ("records", "members", "export"):
-            repository = Repository(paths.database, config.timezone)
+            repository = Repository(
+                paths.database, config.timezone, database_url=paths.database_url
+            )
             if arguments.command == "members":
                 emit(repository.members())
             elif arguments.command == "records":
@@ -226,7 +236,7 @@ def main(argv=None):
                         "embedding_dimension": 128,
                         "registered_members": len(session.gallery.names),
                         "config": asdict(config),
-                        "database": str(paths.database),
+                        "database": session.repository.storage,
                         "exports": str(paths.exports),
                     }
                 )
@@ -270,7 +280,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         emit(Event("session_stopped", "Stopped by user."))
         return 130
-    except (BaselineError, OSError, ValueError, sqlite3.Error, cv2.error) as error:
+    except (BaselineError, OSError, ValueError, sqlite3.Error, psycopg.Error, cv2.error) as error:
         emit({"error": getattr(error, "code", type(error).__name__), "message": str(error)})
         return 1
 

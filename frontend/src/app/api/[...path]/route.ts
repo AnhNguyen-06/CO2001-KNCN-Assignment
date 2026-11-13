@@ -54,6 +54,20 @@ async function proxy(
       cache: "no-store",
       signal: AbortSignal.timeout(25000),
     });
+    if (
+      [502, 503, 504].includes(response.status) ||
+      response.headers.get("content-type")?.includes("text/html")
+    ) {
+      await response.body?.cancel();
+      return Response.json(
+        {
+          code: "BACKEND_WAKING_UP",
+          message:
+            "The recognition service is starting or temporarily unavailable. Retrying automatically.",
+        },
+        { status: 503, headers: { "Retry-After": "10" } },
+      );
+    }
     const headers = new Headers({ "Cache-Control": "no-store" });
     for (const key of ["content-type", "content-disposition"]) {
       const value = response.headers.get(key);
@@ -65,7 +79,7 @@ async function proxy(
       {
         code: "BACKEND_UNAVAILABLE",
         message:
-          "The recognition service is unavailable. Check the backend connection and retry.",
+          "The recognition service is starting or temporarily unavailable. Retrying automatically.",
       },
       { status: 503 },
     );

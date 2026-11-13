@@ -212,3 +212,22 @@ class ExportWorker:
             self.condition.notify_all()
         self.thread.join(timeout=10)
         return not self.thread.is_alive()
+
+
+class DownloadExports:
+    """Cloud mode builds workbooks from durable database records on download."""
+
+    def schedule(self, date: str):
+        pass
+
+    def retry_pending(self):
+        pass
+
+    def drain_events(self):
+        return []
+
+    def flush(self, timeout: float = 10):
+        return True
+
+    def close(self):
+        return True

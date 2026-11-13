@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from .config import Config, Paths
-from .export import ExcelExporter, ExportWorker
+from .export import DownloadExports, ExcelExporter, ExportWorker
 from .storage import Repository, identity
 from .tracking import TemporalTracker
 from .types import BaselineError, Event, FramePacket, FrameResult
@@ -39,7 +39,9 @@ class BaselineSession:
         self.clock = clock or Clock()
         self.vision = vision if vision is not None else VisionEngine(config, paths.model_dir)
         self.repository = (
-            repository if repository is not None else Repository(paths.database, config.timezone)
+            repository
+            if repository is not None
+            else Repository(paths.database, config.timezone, database_url=paths.database_url)
         )
         self.gallery = self.repository.gallery(
             self.vision.model_id, self.vision.preprocessing_version
@@ -47,12 +49,15 @@ class BaselineSession:
         self.gallery_ready = True
         self.tracker = TemporalTracker(config)
         self.owns_exports = exports is None
-        self.exporter = (
-            exports.exporter
-            if exports is not None
-            else ExcelExporter(self.repository, paths.exports)
-        )
-        self.exports = exports if exports is not None else ExportWorker(self.exporter)
+        if exports is not None:
+            self.exporter = getattr(exports, "exporter", None)
+            self.exports = exports
+        elif paths.export_mode == "download":
+            self.exporter = None
+            self.exports = DownloadExports()
+        else:
+            self.exporter = ExcelExporter(self.repository, paths.exports)
+            self.exports = ExportWorker(self.exporter)
         self.generation: int | None = None
         self.last_frame_id = -1
         self.saved: dict[tuple[int, str, str], str] = {}

@@ -42,7 +42,7 @@
 
 - Chỉ báo “Điểm danh thành công” sau commit SQLite.
 - Ghi thất bại phải báo lỗi và có thể thử lại. Cache UI được cập nhật sau kết quả database.
-- SQLite là nguồn tạo Excel. File theo mẫu `attendance_YYYY_MM_DD.xlsx`.
+- Database là nguồn tạo Excel. Cloud dùng PostgreSQL và download mode. Local dùng SQLite cùng daily exporter. File theo mẫu `attendance_YYYY_MM_DD.xlsx`.
 - Các cột theo thứ tự `No.`, `ID`, `Full Name`, `Date`, `Time`, `Status`.
 - ID và tên ghi như dữ liệu văn bản. Nội dung bắt đầu bằng ký tự có thể được Excel hiểu là công thức phải được ghi an toàn dưới dạng text và có bài kiểm tra khi triển khai.
 - Xuất sắp theo recorded_at rồi attendance_id, đánh số từ 1, tên và thời gian lấy từ hàng điểm danh.
@@ -70,4 +70,4 @@
 
 ## Phê duyệt và UI
 
-Chủ dự án đã duyệt và yêu cầu tích hợp FE–CV. UI web Next.js tiếng Anh đã nối FastAPI/SQLite theo phong cách authkit.com-DESIGN.md. Không seed/hardcode thành viên, ảnh hay bản ghi. Nhóm sẽ đăng ký từ website; dữ liệu kiểm thử phải ở DB riêng. localStorage chỉ lưu preferences, không dùng làm nơi lưu tài khoản/điểm danh. Xóa dữ liệu tự chụp thử đã được chủ dự án cho phép; không xóa hồ sơ thật sau đó để phục vụ demo. Shared backend key chỉ giữ ở server, không đưa vào bundle client. Vercel frontend kết nối Python host có persistent volume; cấu hình theo DEPLOYMENT.
+Chủ dự án đã duyệt và yêu cầu tích hợp FE–CV. UI web Next.js tiếng Anh đã nối FastAPI/SQLite theo phong cách authkit.com-DESIGN.md. Không seed/hardcode thành viên, ảnh hay bản ghi. Nhóm sẽ đăng ký từ website; dữ liệu kiểm thử phải ở DB riêng. localStorage chỉ lưu preferences, không dùng làm nơi lưu tài khoản/điểm danh. Xóa dữ liệu tự chụp thử đã được chủ dự án cho phép; không xóa hồ sơ thật sau đó để phục vụ demo. Shared backend key chỉ giữ ở server, không đưa vào bundle client. Cấu hình miễn phí dùng Vercel frontend, Render Free Python và Neon Free PostgreSQL; cấu hình theo DEPLOYMENT. Chế độ cloud dựng Excel lúc download để phù hợp filesystem tạm.

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: presence-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PRESENCE_BACKEND_KEY
+        sync: false
+      - key: PRESENCE_EXPORT_MODE
+        value: download
+      - key: PRESENCE_CV_THREADS
+        value: "1"

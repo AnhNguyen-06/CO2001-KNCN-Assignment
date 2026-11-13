@@ -27,7 +27,7 @@ type Store = WorkspaceData & {
   ready: boolean;
   backendError: string;
   notify: (message: string, kind?: Toast["kind"]) => void;
-  refresh: () => Promise<void>;
+  refresh: (afterWrite?: boolean) => Promise<void>;
   addMember: (
     id: string,
     name: string,
@@ -49,32 +49,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [backendError, setBackendError] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
-  const requestVersion = useRef(0);
+  const pendingRefresh = useRef<Promise<void> | null>(null);
+  const serviceReady = useRef(false);
   const mounted = useRef(true);
   const notify = useCallback(
     (message: string, kind: Toast["kind"] = "success") =>
       setToast({ message, kind }),
     [],
   );
-  const refresh = useCallback(async () => {
-    const version = ++requestVersion.current;
-    try {
-      const snapshot = await api<WorkspaceData>("/workspace");
-      if (mounted.current && version === requestVersion.current) {
-        setData(snapshot);
-        setReady(true);
-        setBackendError("");
+  const refresh = useCallback((afterWrite = false): Promise<void> => {
+    if (pendingRefresh.current)
+      return afterWrite
+        ? pendingRefresh.current.then(() => refresh())
+        : pendingRefresh.current;
+    const request = (async () => {
+      try {
+        const snapshot = await api<WorkspaceData>("/workspace");
+        if (mounted.current) {
+          setData(snapshot);
+          setReady(true);
+          serviceReady.current = true;
+          setBackendError("");
+        }
+      } catch (error) {
+        if (mounted.current) {
+          setReady(false);
+          serviceReady.current = false;
+          setBackendError(
+            error instanceof ApiError &&
+              ["BACKEND_WAKING_UP", "BACKEND_UNAVAILABLE"].includes(error.code)
+              ? "The recognition service may be waking up. This can take about a minute on free hosting. Retrying automatically."
+              : error instanceof Error
+                ? error.message
+                : "The backend is unavailable.",
+          );
+        }
+      } finally {
+        pendingRefresh.current = null;
       }
-    } catch (error) {
-      if (mounted.current && version === requestVersion.current) {
-        setReady(false);
-        setBackendError(
-          error instanceof Error
-            ? error.message
-            : "The backend is unavailable.",
-        );
-      }
-    }
+    })();
+    pendingRefresh.current = request;
+    return request;
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -96,16 +111,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     setPreferencesLoaded(true);
     void refresh();
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, 2500);
+    let timer: ReturnType<typeof setTimeout>;
+    let disposed = false;
+    const poll = async () => {
+      if (document.visibilityState === "visible") await refresh();
+      if (!disposed)
+        timer = setTimeout(poll, serviceReady.current ? 15000 : 10000);
+    };
+    timer = setTimeout(poll, 10000);
     const visible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
     document.addEventListener("visibilitychange", visible);
     return () => {
       mounted.current = false;
-      clearInterval(timer);
+      disposed = true;
+      clearTimeout(timer);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [refresh]);
@@ -131,7 +152,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         full_name: name.trim(),
         images,
       });
-      await refresh();
+      await refresh(true);
       notify(name.trim() + " is registered and ready to check in.");
       return { ok: true, message: "Member registered." };
     } catch (error) {

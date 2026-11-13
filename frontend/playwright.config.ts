@@ -8,11 +8,12 @@ const dataDir =
   mkdtempSync(path.join(backend, "var", "web-e2e-"));
 process.env.PRESENCE_TEST_DATA_DIR = dataDir;
 const knownVideo = path.join(backend, "var/verification/web-camera-known.y4m");
+const externalBackend = process.env.PRESENCE_E2E_BACKEND_URL;
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
   workers: 1,
-  timeout: 120000,
+  timeout: 180000,
   expect: { timeout: 20000 },
   reporter: "list",
   metadata: { backendDataDir: dataDir },
@@ -31,25 +32,34 @@ export default defineConfig({
     trace: "off",
   },
   webServer: [
-    {
-      command:
-        '"' +
-        path.join(backend, ".venv/Scripts/python.exe") +
-        '" -m uvicorn presence_cv.api:app --host 127.0.0.1 --port 8001',
-      cwd: backend,
-      url: "http://127.0.0.1:8001/api/health",
-      reuseExistingServer: false,
-      timeout: 60000,
-      env: { PRESENCE_DATA_DIR: dataDir, PRESENCE_BACKEND_KEY: "" },
-    },
+    ...(!externalBackend
+      ? [
+          {
+            command:
+              '"' +
+              path.join(backend, ".venv/Scripts/python.exe") +
+              '" -m uvicorn presence_cv.api:app --host 127.0.0.1 --port 8001',
+            cwd: backend,
+            url: "http://127.0.0.1:8001/api/health",
+            reuseExistingServer: false,
+            timeout: 60000,
+            env: {
+              PRESENCE_DATA_DIR: dataDir,
+              PRESENCE_BACKEND_KEY: "",
+              DATABASE_URL: "",
+              PRESENCE_EXPORT_MODE: "daily",
+            },
+          },
+        ]
+      : []),
     {
       command: "npm run start -- --port 3100",
       url: "http://127.0.0.1:3100/api/health",
       reuseExistingServer: false,
       timeout: 60000,
       env: {
-        PRESENCE_BACKEND_URL: "http://127.0.0.1:8001",
-        PRESENCE_BACKEND_KEY: "",
+        PRESENCE_BACKEND_URL: externalBackend ?? "http://127.0.0.1:8001",
+        PRESENCE_BACKEND_KEY: process.env.PRESENCE_E2E_BACKEND_KEY ?? "",
       },
     },
   ],

@@ -31,7 +31,7 @@ Register a unique ID, full name and three actual camera photos. Every photo is c
 ## Integration
 
 - `src/app/api/[...path]/route.ts`: bounded same-origin HTTP proxy to FastAPI.
-- `src/components/provider.tsx`: reads actual profiles/records/export state; refreshes after writes and polls while visible.
+- `src/components/provider.tsx`: reads actual profiles/records/export state; refreshes after writes and polls while visible. Requests are serialized, healthy polling uses 15s and disconnected polling 10s. Startup failures show a waking-up message and retry automatically.
 - `src/lib/use-camera.ts`: owns getUserMedia, captures unmirrored JPEGs and stops media tracks.
 - `src/lib/use-recognition.ts`: backend session lifecycle; one frame request at a time, no growing queue.
 - `src/components/face-overlay.tsx`: actual returned boxes/landmarks/names, mapped to video dimensions and mirror setting.
@@ -65,3 +65,5 @@ npm run start
 ```
 
 For Vercel, choose frontend as Root Directory and configure PRESENCE_BACKEND_URL to a reachable HTTPS Python backend with persistent data storage. See [deployment instructions](../docs/DEPLOYMENT.md).
+
+For an isolated PostgreSQL/Linux browser run, set PRESENCE_E2E_BACKEND_URL, PRESENCE_E2E_BACKEND_KEY and PRESENCE_E2E_DATABASE_URL before npm run test:e2e. This skips the Python test server and connects the Next.js test server to the specified API. Use a fresh test-only database because the journey enrolls a public fixture identity and creates attendance. Leave these variables unset for the normal isolated SQLite run.

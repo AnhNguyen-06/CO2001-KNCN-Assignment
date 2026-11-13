@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -81,6 +81,12 @@ class Config:
 class Paths:
     model_dir: Path = BACKEND_ROOT / "models"
     data_dir: Path = BACKEND_ROOT / "var"
+    database_url: str | None = field(default=None, repr=False)
+    export_mode: str = "daily"
+
+    def __post_init__(self):
+        if self.export_mode not in ("daily", "download"):
+            raise ValueError("PRESENCE_EXPORT_MODE must be daily or download")
 
     @property
     def database(self):

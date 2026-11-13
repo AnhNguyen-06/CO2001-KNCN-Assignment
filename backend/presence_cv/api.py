@@ -202,7 +202,7 @@ class WebRuntime:
             digests = {hashlib.sha256(image.tobytes()).hexdigest() for image in images}
             with repository.connection() as connection:
                 stored = {
-                    row[0]
+                    row["image_digest"]
                     for row in connection.execute(
                         "SELECT image_digest FROM face_samples WHERE person_id=?", (person_id,)
                     )
@@ -218,9 +218,18 @@ class WebRuntime:
 
 
 def create_app(config: Config | None = None, paths: Paths | None = None):
-    config = config or replace(Config.load(), max_observation_gap=1.2, confirmation_window=2.5)
+    config = config or replace(
+        Config.load(),
+        max_observation_gap=2.5,
+        confirmation_window=6.0,
+        max_frame_age=3.0,
+        opencv_threads=int(os.environ.get("PRESENCE_CV_THREADS", "4")),
+    )
+    database_url = os.environ.get("DATABASE_URL", "").strip() or None
     paths = paths or Paths(
-        data_dir=Path(os.environ.get("PRESENCE_DATA_DIR", str(Paths().data_dir))).resolve()
+        data_dir=Path(os.environ.get("PRESENCE_DATA_DIR", str(Paths().data_dir))).resolve(),
+        database_url=database_url,
+        export_mode=os.environ.get("PRESENCE_EXPORT_MODE", "download" if database_url else "daily"),
     )
 
     @asynccontextmanager
@@ -276,13 +285,17 @@ def create_app(config: Config | None = None, paths: Paths | None = None):
     async def health():
         return {
             "status": "ready",
-            "storage": "sqlite",
+            "storage": app.state.runtime.session.repository.storage,
+            "export_mode": paths.export_mode,
             "timezone": config.timezone,
             "recognition": "YuNet + SFace",
         }
 
     @app.get("/api/workspace")
     async def workspace():
+        return await asyncio.to_thread(workspace_snapshot)
+
+    def workspace_snapshot():
         runtime = app.state.runtime
         repository = runtime.session.repository
         members = []
@@ -313,12 +326,16 @@ def create_app(config: Config | None = None, paths: Paths | None = None):
         states = []
         for state in repository.export_states():
             state["status"] = (
-                "error"
-                if state["last_error"]
-                else "synced"
-                if state["exported_revision"] == state["data_revision"]
-                and runtime.session.exporter.destination(state["attendance_date"]).exists()
-                else "pending"
+                "available"
+                if paths.export_mode == "download"
+                else (
+                    "error"
+                    if state["last_error"]
+                    else "synced"
+                    if state["exported_revision"] == state["data_revision"]
+                    and runtime.session.exporter.destination(state["attendance_date"]).exists()
+                    else "pending"
+                )
             )
             states.append(state)
         return {"members": members, "records": records, "exports": states}
@@ -356,11 +373,14 @@ def create_app(config: Config | None = None, paths: Paths | None = None):
 
     @app.post("/api/exports/retry")
     async def retry_exports():
-        app.state.runtime.session.exports.retry_pending()
+        await asyncio.to_thread(app.state.runtime.session.exports.retry_pending)
         return {"scheduled": True}
 
     @app.get("/api/exports/download")
     async def download(date: Date | None = None, member_id: str = "", q: str = ""):
+        return await asyncio.to_thread(download_workbook, date, member_id, q)
+
+    def download_workbook(date, member_id, q):
         repository = app.state.runtime.session.repository
         records = [
             row

@@ -30,7 +30,7 @@ test("landing and workspace start without preloaded identities", async ({
   });
   expect(errors).toEqual([]);
 });
-test("web enrollment, actual CV check-in, SQLite persistence and Excel work end to end", async ({
+test("web enrollment, actual CV check-in, database persistence and Excel work end to end", async ({
   page,
   request,
 }, testInfo) => {
@@ -140,7 +140,7 @@ test("web enrollment, actual CV check-in, SQLite persistence and Excel work end 
     path.join(backend, ".venv/Scripts/python.exe"),
     [
       "-c",
-      "import sqlite3,json,sys; c=sqlite3.connect(sys.argv[1]); print(json.dumps([c.execute('SELECT count(*) FROM '+t).fetchone()[0] for t in ['persons','face_samples','attendance']]))",
+      "import sqlite3,json,sys,os; import psycopg; url=os.environ.get('PRESENCE_E2E_DATABASE_URL'); c=psycopg.connect(url) if url else sqlite3.connect(sys.argv[1]); print(json.dumps([c.execute('SELECT count(*) FROM '+t).fetchone()[0] for t in ['persons','face_samples','attendance']])); c.close()",
       database,
     ],
     { encoding: "utf-8" },
@@ -288,7 +288,7 @@ test("camera denial and backend failure have recoverable UI states", async ({
       contentType: "application/json",
       body: JSON.stringify({
         message: "Recognition service temporarily unavailable",
-        code: "BACKEND_UNAVAILABLE",
+        code: "BACKEND_ERROR",
       }),
     }),
   );
@@ -356,6 +356,39 @@ test("preference reset keeps database accounts and attendance intact", async ({
   expect(data.members).toHaveLength(1);
   expect(data.records).toHaveLength(1);
 });
+test("sleeping service recovers automatically without overlapping retries", async ({
+  page,
+}) => {
+  let recovering = false;
+  let pending = 0;
+  let peakPending = 0;
+  await page.route("**/api/workspace", async (route) => {
+    if (recovering) return route.continue();
+    pending++;
+    peakPending = Math.max(peakPending, pending);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    pending--;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<html><body>Service is starting</body></html>",
+    });
+  });
+  await page.goto("/attendance");
+  await expect(page.locator(".storage-warning")).toContainText(
+    "may be waking up",
+  );
+  const button = page.getByRole("button", {
+    name: "Turn on camera",
+    exact: true,
+  });
+  await expect(button).toBeDisabled();
+  recovering = true;
+  await expect(button).toBeEnabled({ timeout: 20000 });
+  await expect(page.locator(".storage-warning")).toHaveCount(0);
+  expect(peakPending).toBe(1);
+});
+
 test("connected pages are responsive and keyboard navigation remains available", async ({
   page,
 }) => {

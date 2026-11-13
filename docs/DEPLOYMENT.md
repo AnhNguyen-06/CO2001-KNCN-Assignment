@@ -1,77 +1,141 @@
-# Triển khai frontend Vercel và Python backend
+# Deploy miễn phí với Vercel, Render và Neon
 
-## Mô hình triển khai
-
-```text
-Browser HTTPS → Next.js trên Vercel → Python FastAPI HTTPS
-                                      ├─ YuNet + SFace trên CPU
-                                      └─ persistent volume: SQLite + Excel
-```
-
-Code đã có proxy và biến môi trường cho mô hình này. Chưa deploy hoặc push remote trong lần tích hợp này; chủ dự án sẽ cung cấp repo sau khi kiểm tra.
-
-SQLite là database thật dạng file. File cần nằm trên ổ đĩa bền vững của backend. Vercel Functions không cung cấp ổ đĩa chia sẻ bền vững cho SQLite trong kiến trúc này; vì vậy deploy riêng frontend lên Vercel không đủ để chạy toàn bộ hệ thống. Xem [giải thích chính thức của Vercel](https://vercel.com/kb/guide/is-sqlite-supported-in-vercel).
-
-## Backend
-
-Chuẩn bị một host Python luôn chạy, HTTPS và persistent volume. Với quy mô nhóm nhỏ, chạy một process/worker để mọi lease, gallery và model cùng runtime. Chưa hỗ trợ chia tải nhiều instance.
-
-1. Đưa mã backend và manifest/license lên host; cài Python 3.13 và dependencies theo backend/README.md.
-2. Chạy python main.py setup-models ở thư mục backend để tải hai model đúng checksum. Dùng Linux cần cung cấp thư viện hệ thống mà opencv-python yêu cầu; xác minh import cv2 và lệnh doctor trên image/host thực tế.
-3. Mount một volume bền vững, ví dụ /data/presence. Cấp quyền ghi cho process Python.
-4. Đặt biến môi trường của dịch vụ:
+## Kiến trúc
 
 ```text
-PRESENCE_DATA_DIR=/data/presence
-PRESENCE_BACKEND_KEY=<random-secret-shared-only-with-Next>
+Browser webcam → Next.js trên Vercel → FastAPI + YuNet/SFace trên Render Free
+                                              ↓
+                                    PostgreSQL trên Neon Free
+                                              ↓
+                                    Excel tạo khi người dùng tải
 ```
 
-5. Chạy từ backend, thay PORT bằng cổng host cấp:
+Frontend cần PRESENCE_BACKEND_URL để tìm Python API. Backend cần DATABASE_URL để lưu hồ sơ/embedding/điểm danh trong Neon. Vercel triển khai thư mục frontend, Docker backend được build riêng trên Render.
 
-```sh
-python -m uvicorn presence_cv.api:app --host 0.0.0.0 --port 8000 --workers 1
+Render Free có filesystem tạm và ngủ khi không hoạt động. Chế độ cloud dùng PostgreSQL và dựng workbook trong bộ nhớ lúc download. [Giới hạn Render Free](https://render.com/docs/free).
+
+## 1. Tạo Neon
+
+1. Đăng nhập Neon, chọn tạo project và gói Free. Đặt tên dễ nhận biết, ví dụ presence-attendance.
+2. Chọn region gần backend Singapore nhất trong những region tài khoản cung cấp. Có thể chọn PostgreSQL 17, phiên bản đã dùng để kiểm thử local.
+3. Dùng database/role mặc định của project hoặc tạo database riêng cho bài tập.
+4. Bấm **Connect**, chọn đúng branch, database và role.
+5. Bật **Connection pooling**, copy toàn bộ connection string dạng PostgreSQL URI. Giữ nguyên sslmode và channel_binding Neon cung cấp.
+6. Lưu connection string ở biến môi trường DATABASE_URL của Render trong bước sau.
+
+Backend tự tạo các bảng meta, persons, face_samples, attendance và export_state trong lần khởi động đầu tiên. Mỗi hồ sơ có ID duy nhất và ba embedding; UNIQUE(person_id, attendance_date) chống trùng điểm danh.
+
+Connection string chứa mật khẩu database. Đặt nó trong environment của backend. Tham khảo [hướng dẫn lấy connection string của Neon](https://neon.com/docs/connect/connect-from-any-app).
+
+Để xem dữ liệu sau khi đăng ký, mở SQL Editor của đúng database/branch:
+
+```sql
+SELECT person_id, full_name, created_at FROM persons;
+SELECT person_id, count(*) AS sample_count FROM face_samples GROUP BY person_id;
+SELECT person_id, full_name_snapshot, attendance_date, recorded_at FROM attendance;
 ```
 
-6. Gắn HTTPS/domain qua host hoặc reverse proxy. Kiểm tra /api/health trả ready. Các endpoint dữ liệu gọi trực tiếp thiếu X-Presence-Key phải trả 401 khi đã cấu hình key.
-7. Thử restart/redeploy backend và xác minh hồ sơ/bản ghi vẫn còn. Chụp backup bằng SQLite backup API hoặc dừng service trước khi copy DB; không chỉ copy file SQLite chính trong lúc WAL đang ghi.
+Database Neon mới bắt đầu trống. Hồ sơ SQLite local có thể tiếp tục dùng local. Nhóm dự kiến tự đăng ký trên web sau deploy.
 
-Các biến backend lấy từ environment thực tế của process. File .env.example là mẫu tham khảo; Uvicorn command trên không tự đọc .env. Không bật --reload trong production.
+## 2. Tạo Render Web Service
 
-Host cần truy cập được từ Vercel. Địa chỉ127.0.0.1:8000 trên Vercel trỏ vào môi trường Vercel, không trỏ về laptop của bạn. Nếu dùng backend laptop cho demo từ web public cần endpoint HTTPS có thể truy cập từ cloud và giữ laptop/server đang chạy; độ ổn định phụ thuộc mạng.
+Repo đã có backend/Dockerfile, backend/.dockerignore, runtime lockfile và render.yaml khai báo plan free.
 
-## Frontend Vercel
+Cách tạo qua dashboard:
 
-Sau khi GitHub repo được tạo và source đã push:
+1. Đăng nhập Render bằng GitHub, chọn **New → Web Service**, kết nối repo AnhNguyen-06/CO2001-KNCN-Assignment.
+2. Chọn branch main.
+3. Đặt **Root Directory** là backend.
+4. Chọn **Language / Runtime** là Docker.
+5. Đặt **Dockerfile Path** là ./Dockerfile và **Docker Build Context Directory** là ., tính tương đối với Root Directory.
+6. Chọn **Region** Singapore và **Instance / Compute Plan** Free.
+7. Dùng lệnh mặc định trong Dockerfile. Docker CMD tự đọc PORT của Render, bind 0.0.0.0 và chạy một Uvicorn worker.
+8. Đặt **Health Check Path** là /api/health.
+9. Thêm environment theo bảng dưới, rồi bấm Deploy Web Service.
 
-| Thiết lập | Giá trị |
+| Biến trên Render | Giá trị |
 | --- | --- |
-| Root Directory | frontend |
-| Framework | Next.js |
-| Install command | npm ci |
-| Build command | npm run build |
-| Output | Mặc định Next.js |
-| PRESENCE_BACKEND_URL | https://<backend-domain>, không thêm /api |
-| PRESENCE_BACKEND_KEY | Cùng secret của backend |
+| DATABASE_URL | Toàn bộ PostgreSQL URI copy từ Neon |
+| PRESENCE_BACKEND_KEY | Một secret ngẫu nhiên do bạn giữ, dùng cùng giá trị trên Vercel |
+| PRESENCE_EXPORT_MODE | download |
+| PRESENCE_CV_THREADS | 1 |
 
-Đặt hai biến ở môi trường Production, và Preview nếu cần test preview. Redeploy sau khi đổi env. Không thêm tiền tố NEXT_PUBLIC; key chỉ được Next route handler sử dụng ở server. Tham khảo [Next.js trên Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs) và [environment variables](https://vercel.com/docs/environment-variables).
+Docker mặc định PRESENCE_DATA_DIR=/tmp/presence và dùng OpenCV headless. Hai model được tải và kiểm tra SHA-256 lúc build, có sẵn trong image lúc start. Ảnh camera xử lý trong bộ nhớ. PostgreSQL giữ dữ liệu qua restart/redeploy.
 
-Browser gọi /api cùng origin; chỉ Next server gọi backend, không cần mở CORS cho camera client. Mỗi frame chỉ một request đang chờ, mỗi ảnh nhỏ hơn 1 MiB, request tổng tối đa 4 MiB. Proxy timeout 25s; xử lý realtime cần nhanh hơn nhiều để đủ bằng chứng xác nhận. Không cam kết nhận diện dưới 1 giây qua Internet trước khi đo host/mạng thực.
+Tạo backend key trên máy local nếu cần:
 
-## Kiểm tra sau deploy
+```powershell
+backend/.venv/Scripts/python.exe -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-1. /api/health của frontend trả ready.
-2. Website mới không có tài khoản seed.
-3. Đăng ký hồ sơ bằng 3 ảnh thật; Members hiển thị đúng tên/ID.
-4. Nhận diện tạo 1 bản ghi; bật/tắt lại không tạo trùng.
-5. Refresh/trình duyệt khác đọc cùng hồ sơ và bản ghi.
-6. Restart backend vẫn còn dữ liệu; Excel tải đúng từ DB.
-7. Thử người chưa đăng ký, camera denied và backend unavailable.
-8. Thử đăng ký live qua mạng lớp trước giờ trình bày.
+Chờ log báo Application startup complete và Uvicorn running. Mở URL Render cấp, ví dụ https://<service-name>.onrender.com/api/health.
 
-Dùng cùng backend và cùng PRESENCE_DATA_DIR để giữ hồ sơ đã đăng ký. Nếu chọn backend/database mới thì dữ liệu không tự chuyển theo mã nguồn frontend.
+Response cần có:
 
-## Phạm vi bản hiện tại
+```json
+{
+  "status": "ready",
+  "storage": "postgresql",
+  "export_mode": "download",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "recognition": "YuNet + SFace"
+}
+```
 
-Đăng ký và điểm danh dùng dữ liệu thật, nhưng workspace hiện chưa có xác thực đăng nhập hay quyền đọc/xuất riêng. Người truy cập link có thể đăng ký và xem danh sách/lịch sử. Shared backend key chỉ bảo vệ tuyến server-to-server, không thay thế quyền người dùng.
+Nếu storage là sqlite, kiểm tra DATABASE_URL trên service và deploy lại trước khi thu dữ liệu nhóm. Khi đã có key, endpoint dữ liệu gọi trực tiếp thiếu X-Presence-Key trả 401; frontend proxy thêm key tại server.
 
-Đây là bản tích hợp cho demo nhóm nhỏ, chưa phải hệ thống quản lý danh tính công khai hoàn chỉnh. Để mở rộng vận hành cần xác thực/phân quyền, chống lạm dụng, chính sách dữ liệu và đánh giá liveness riêng. Các yêu cầu đó không được giả lập trong giao diện hiện tại.
+Có thể dùng **New → Blueprint** và chọn repo để Render đọc render.yaml thay cho các bước cấu hình thủ công. Nhập DATABASE_URL và PRESENCE_BACKEND_KEY khi được yêu cầu. [Docker trên Render](https://render.com/docs/docker), [Blueprint specification](https://render.com/docs/blueprint-spec).
+
+## 3. Kết nối Vercel
+
+Bạn đã biết thao tác deploy frontend. Đặt Root Directory là frontend và thêm hai biến server-side:
+
+| Biến trên Vercel | Giá trị |
+| --- | --- |
+| PRESENCE_BACKEND_URL | https://<service-name>.onrender.com |
+| PRESENCE_BACKEND_KEY | Cùng secret đã đặt trên Render |
+
+PRESENCE_BACKEND_URL là origin, bỏ phần /api và /api/health. Đặt biến cho Production và Preview nếu sử dụng cả hai, sau đó redeploy frontend. Browser gửi /api cùng origin, Next proxy gọi Python bằng secret. DATABASE_URL được dùng ở backend Render.
+
+Mở https://<frontend-domain>/api/health để kiểm tra đường đi Vercel→Render. Kết quả phải giống health backend.
+
+## 4. Chạy demo sau deploy
+
+1. Mở website vài phút trước giờ trình bày để dịch vụ Free thức dậy.
+2. Nếu thấy thông báo waking up, giữ trang mở. Frontend tự thử lại và có nút Retry connection.
+3. Bạn đăng ký đầu tiên qua Members, nhập họ tên/MSSV, chụp ba góc nhẹ và Save profile.
+4. Kiểm tra hồ sơ cùng ba mẫu trong Neon SQL Editor.
+5. Mở Attendance, bật camera, giữ mặt ổn định đến khi báo thành công.
+6. Kiểm tra Records và tải Excel.
+7. Restart/redeploy backend, mở lại web. Hồ sơ và điểm danh phải còn trong Neon.
+8. Đăng ký thêm 1–2 người trước buổi học, để 1–2 người đăng ký trực tiếp trong lúc trình bày.
+
+Render Free ngủ sau 15 phút không có inbound traffic và có thể cần khoảng một phút để thức dậy. Proxy timeout 25 giây nên lần đầu có thể báo chờ, rồi frontend tự thử lại. Hạn mức Free của từng nền tảng cần theo dõi trong dashboard. [Render Free](https://render.com/docs/free).
+
+Thời gian CV phụ thuộc CPU chia sẻ và mạng. Container local giới hạn 0.1 CPU/512 MB đã chạy model thật, nhưng thời gian trên Render/Neon cần đo sau deploy.
+
+## 5. Xử lý lỗi
+
+| Dấu hiệu | Kiểm tra |
+| --- | --- |
+| Build lỗi tải model | Xem log GitHub download/checksum, retry deploy |
+| Module cv2 lỗi | Dùng Dockerfile và requirements-cloud.lock.txt của repo |
+| Kết nối database thất bại | DATABASE_URL đúng branch/role/password, URI còn đủ SSL parameters |
+| Health storage=sqlite | DATABASE_URL đang trống hoặc đặt sai service |
+| Workspace báo401 | PRESENCE_BACKEND_KEY trên Render/Vercel phải trùng |
+| Web chờ backend lâu | Mở health Render, xem log startup, đợi cold start rồi thử lại |
+| Nhận diện chậm | Thử từng người, giữ mặt ổn định, ánh sáng tốt, kiểm tra mạng |
+| Camera bị từ chối | Allow camera và dùng HTTPS |
+| Excel ready to download | Dữ liệu đã lưu trong PostgreSQL, bấm Export Excel để tải workbook |
+
+## 6. Chỉ deploy Vercel sẽ hoạt động đến đâu?
+
+Landing và các trang Next.js có thể render, browser có thể xin quyền camera. Luồng đăng ký và điểm danh cần FastAPI để chạy YuNet/SFace và ghi database. Deploy frontend riêng hiện không khởi chạy Python service, nên các request /api sẽ thất bại nếu PRESENCE_BACKEND_URL chưa trỏ tới backend hoạt động.
+
+127.0.0.1 trên Vercel là môi trường Vercel. Muốn frontend cloud gọi API trên laptop, laptop phải có endpoint HTTPS truy cập được từ cloud. Với cấu hình đã chọn, Render cung cấp endpoint này và Neon cung cấp database bền vững. SQLite đặt trên filesystem Vercel Functions không đáp ứng kiến trúc lưu trữ hiện tại. [Vercel về SQLite](https://vercel.com/kb/guide/is-sqlite-supported-in-vercel).
+
+## Phạm vi kiểm chứng
+
+Mã nguồn hỗ trợ PostgreSQL/SQLite, cloud download, Docker Linux và retry cold start. Kiểm thử dùng PostgreSQL 17 trong Docker và backend Linux có giới hạn tài nguyên. Cần tài khoản/connection string của bạn để kiểm chứng trực tiếp Render/Neon sau deploy.
+
+Luồng hiện tạo hồ sơ nhận diện bằng tên, ID và khuôn mặt. Email/password, phân quyền và liveness là các khả năng phát triển riêng. Nhóm dùng luồng đăng ký đã có cho bài tập.

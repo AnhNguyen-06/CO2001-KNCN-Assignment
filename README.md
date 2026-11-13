@@ -1,6 +1,6 @@
 # Presence — Webcam Facial Recognition Attendance
 
-Ứng dụng điểm danh cho môn Kỹ năng chuyên nghiệp cho Kỹ sư, HCMUT. Frontend Next.js đã tích hợp FastAPI, YuNet + SFace, SQLite và Excel. Giao diện tiếng Anh theo [mẫu thiết kế](docs/authkit.com-DESIGN.md), dùng Inter/Manrope self-hosted.
+Ứng dụng điểm danh cho môn Kỹ năng chuyên nghiệp cho Kỹ sư, HCMUT. Frontend Next.js đã tích hợp FastAPI, YuNet + SFace, SQLite/PostgreSQL và Excel. Giao diện tiếng Anh theo [mẫu thiết kế](docs/authkit.com-DESIGN.md), dùng Inter/Manrope self-hosted.
 
 ## Chạy ứng dụng web
 
@@ -29,21 +29,25 @@ Mở http://127.0.0.1:3000. Nếu các server này đã chạy, dùng ngay đư�
 ## Dữ liệu và hành vi
 
 - Website bắt đầu trống, không seed thành viên, ảnh hay lượt điểm danh. Hồ sơ tự chụp thử đã được xóa.
-- Họ tên, ID dạng chuỗi, ba embedding/người và điểm danh lưu trong database thật: `backend/var/attendance.sqlite3`.
+- Họ tên, ID dạng chuỗi, ba embedding/người và điểm danh lưu trong database thật. Local dùng SQLite tại `backend/var/attendance.sqlite3`; khi có `DATABASE_URL`, backend dùng PostgreSQL của Neon.
 - Ảnh webcam chỉ dùng trong bộ nhớ để kiểm tra và trích xuất embedding. Không ghi ảnh gốc vào database hoặc localStorage.
 - Mỗi ID chỉ có một bản ghi/ngày theo Asia/Ho_Chi_Minh, kể cả sau restart hoặc khi nhiều trình duyệt gửi đồng thời.
-- Thông báo thành công chỉ xuất hiện sau commit. Excel tự cập nhật ở `backend/var/exports/`; lỗi khóa file có trạng thái và retry riêng.
+- Thông báo thành công chỉ xuất hiện sau commit. Local tự cập nhật Excel tại `backend/var/exports/`. Cloud dùng `PRESENCE_EXPORT_MODE=download`, dựng workbook từ DB khi tải.
 - Trình duyệt chỉ lưu tùy chọn giao diện. Xóa localStorage không xóa hồ sơ/điểm danh.
 - Đăng ký hiện tạo hồ sơ nhận diện bằng họ tên, ID và khuôn mặt. Bản này chưa có đăng nhập email/mật khẩu hay phân quyền quản trị.
 
 ## Kiến trúc
 
 ```text
-Browser webcam → Next.js /api/* → FastAPI → YuNet / SFace → SQLite
-                                                         └→ Excel worker
+Browser webcam → Next.js /api/* → FastAPI → YuNet / SFace → SQLite hoặc PostgreSQL
+                                                         └→ Excel từ database
 ```
 
-Browser sở hữu camera; backend không mở webcam của server. Next.js proxy cùng origin giúp dùng cùng luồng ở localhost và khi deploy. Vercel chạy frontend; dịch vụ Python và SQLite cần host có ổ đĩa bền vững riêng.
+Browser sở hữu camera; backend không mở webcam của server. Next.js proxy cùng origin giúp dùng cùng luồng ở localhost và khi deploy. Cấu hình miễn phí được chọn là Vercel frontend, Render Free chạy Docker API và Neon Free giữ PostgreSQL. Backend Linux dùng OpenCV headless, một inference thread. Frontend tự thử lại khi Render đang thức dậy.
+
+## Deploy miễn phí
+
+Repo có `backend/Dockerfile` và `render.yaml` cho Render Free. Tạo Neon, đặt `DATABASE_URL`/`PRESENCE_BACKEND_KEY` trên Render, rồi nối Vercel bằng `PRESENCE_BACKEND_URL`/cùng key. Hướng dẫn từng bước và câu trả lời về chỉ deploy Vercel ở [DEPLOYMENT](docs/DEPLOYMENT.md).
 
 ## Kiểm tra
 

@@ -1,6 +1,6 @@
 # Presence backend — FastAPI + CV
 
-Python backend with FastAPI, YuNet detection, quality checks, SFace embeddings, per-browser temporal confirmation, persistent SQLite attendance and automatic Excel export. The standalone CLI remains available for diagnostics.
+Python backend with FastAPI, YuNet detection, quality checks, SFace embeddings, per-browser temporal confirmation, persistent SQLite/PostgreSQL attendance and automatic Excel export. The standalone CLI remains available for diagnostics.
 
 ## Environment
 
@@ -17,7 +17,7 @@ cd backend
 .venv/Scripts/python.exe main.py doctor
 ```
 
-All remaining commands in this document run from `backend/`. For a different compatible Python environment, `python -m pip install -e ".[dev]"` resolves dependencies according to pyproject.toml. The locked environment above is the one used for the reported checks.
+All remaining commands in this document run from `backend/`. For a different compatible Python environment, `python -m pip install -e ".[desktop,dev]"` resolves dependencies according to pyproject.toml. The locked environment above is the one used for the reported checks.
 
 ## Models
 
@@ -40,11 +40,11 @@ From backend/, after setup:
 
 Start Next.js separately and open its workspace. The browser owns the webcam; close standalone camera previews before using it. Register real profiles directly through the web. See [WEB_DEMO](../docs/WEB_DEMO.md) and the [HTTP contract](../docs/INTERFACES.md).
 
-PRESENCE_DATA_DIR overrides the default var directory for persistent hosting. PRESENCE_BACKEND_KEY optionally requires X-Presence-Key from the Next.js server. Set these in the process environment; the example env file is not automatically loaded. Use one Uvicorn worker. The API loads the models once, serializes inference, and shares the exporter/database while retaining independent per-browser tracking.
+PRESENCE_DATA_DIR overrides the local scratch directory. DATABASE_URL selects PostgreSQL instead of the default SQLite. The web API defaults to download-only Excel when a database URL is supplied. PRESENCE_EXPORT_MODE can explicitly select daily or download. PRESENCE_BACKEND_KEY optionally requires X-Presence-Key from the Next.js server. Set these in the process environment; the example env file is not automatically loaded. Use one Uvicorn worker. The API loads the models once, serializes inference, and shares the exporter/database while retaining independent per-browser tracking.
 
 Web registration validates exactly three distinct, quality-approved photos of one consistent identity. It stores name, string ID and embeddings atomically. Original web photos are not saved. Duplicate/similar identities are rejected; exact retry of a committed registration is idempotent. Live recognition is the only web route that creates attendance.
 
-The web adapter uses a 1.2s maximum observation gap and 2.5s confirmation window to accommodate request timing. Other thresholds remain the defaults below. Per-frame age is measured on the backend clock.
+The web adapter uses a 2.5s maximum observation gap, 6s confirmation window and 3s maximum frame age to accommodate low-CPU hosting and request timing. PRESENCE_CV_THREADS controls inference threads; the cloud image uses 1. Other thresholds remain the defaults below. Per-frame age is measured on the backend clock.
 
 ## Register a member with the CLI
 
@@ -177,3 +177,19 @@ Original-frame box and landmark coordinates are returned after detector resizing
 ## Remaining validation
 
 The initial thresholds need calibration using the four members and independent people outside the gallery, across the planned lighting/pose/glasses tests. The RGB identity pipeline also needs its planned phone-photo spoofing test. Liveness is a separate future capability. Browser integration is implemented and tested with actual models and an isolated database. Field measurements with the group remain to be collected after their web enrollment.
+
+## Free cloud deployment
+
+See [Render/Neon walkthrough](../docs/DEPLOYMENT.md). Docker builds from backend/, installs requirements-cloud.lock.txt with opencv-python-headless, downloads pinned ONNX files and runs as a non-root user. The runtime command binds 0.0.0.0 and reads PORT.
+
+DATABASE_URL is a PostgreSQL URI from Neon's Connect dialog, including TLS parameters. The repository uses psycopg binary, parameterized SQL, atomic enrollment and UNIQUE(person_id, attendance_date). Read snapshots use repeatable-read transactions. Schema initialization is serialized with a transaction-scoped advisory lock. Connections are closed after each operation, with prepared statements disabled for transaction pool compatibility.
+
+Download mode stores attendance in the database and builds Excel in memory per download/filter. It starts no background Excel worker and requires no persistent filesystem. Local daily mode retains automatic files, revisions and retry behavior. SQLite and existing local data stay usable when DATABASE_URL is unset.
+
+To run PostgreSQL integration checks, set PRESENCE_TEST_DATABASE_URL to a dedicated test server and run pytest. Each test creates and removes a unique schema there. To test the container locally, build from the repository root:
+
+```powershell
+docker build -t presence-api ./backend
+```
+
+Run it with DATABASE_URL and PRESENCE_BACKEND_KEY supplied through your local environment or an ignored env file. Keep the database URL out of shell history when using real credentials. The cloud runtime has no GUI preview; physical webcam capture remains in the browser.

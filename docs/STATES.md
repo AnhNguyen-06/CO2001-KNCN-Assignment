@@ -97,3 +97,9 @@ CREATED/ALREADY_EXISTS/FAILED kết thúc một yêu cầu. Kết quả trả v�
 | EXPORT_ERROR | Lỗi ghi/thay file, tiếp tục giữ pending |
 
 Thành công xuất revision R chỉ chuyển SYNCED nếu R còn là revision mới nhất. Nút thử lại dùng dữ liệu đã lưu. Giao diện có thể đồng thời hiển thị “Điểm danh thành công” và “Excel đang chờ cập nhật”.
+
+## Cloud cold start và Excel download
+
+BACKEND_WAKING_UP/BACKEND_UNAVAILABLE đưa workspace sang disconnected với thông báo đang chờ dịch vụ. Một request workspace đang chờ được chia sẻ giữa các lần refresh, tránh chồng request. Client tự thử lại khi trang visible. Khi API thành công, dữ liệu thật được nạp và thao tác được bật lại.
+
+Trong export mode download, trạng thái available có nghĩa bản ghi đã lưu và workbook có thể dựng từ database khi tải. Giao diện hiển thị “Attendance saved. Excel is ready to download.” Daily mode local giữ synced/pending/error và worker như trước.

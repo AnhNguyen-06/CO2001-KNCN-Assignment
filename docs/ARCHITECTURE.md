@@ -11,7 +11,7 @@
 | FastAPI | backend/presence_cv/api.py | Validate payload, phiên browser, API đọc/ghi/tải file |
 | BaselineSession | session.py | Gallery, matching, tracking, confirmation, ghi điểm danh |
 | VisionEngine | vision.py | YuNet → quality → alignCrop → SFace → 128D normalized embedding |
-| Repository | storage.py | SQLite transaction, constraints, model metadata, revisions |
+| Repository | storage.py | SQLite/PostgreSQL transaction, constraints, model metadata, revisions |
 | Export worker | export.py | Snapshot DB → file tạm → atomic replace → cập nhật revision |
 
 ## Luồng
@@ -23,7 +23,7 @@ flowchart TD
     NEXT --> API[FastAPI]
     API --> CV[Single inference worker: YuNet + SFace]
     CV --> REG[Đăng ký: đúng 1 mặt, 3 mẫu cùng người]
-    REG --> DB[(SQLite)]
+    REG --> DB[(SQLite / PostgreSQL)]
     DB --> GAL[Gallery embedding]
     GAL --> CV
     CV --> TRACK[Tracker riêng từng phiên browser]
@@ -45,7 +45,7 @@ Client chỉ gửi frame tiếp sau khi request trước trả về, nhịp mụ
 
 Server cấp timestamp monotonic lúc nhận frame, kiểm tra độ mới trước/sau inference. Lease tối đa 15 giây không hoạt động; mỗi request hợp lệ làm mới lease. Tối đa 64 lease đồng thời nhằm chặn tăng bộ nhớ vô hạn. DELETE thu hồi lease ngay rồi đóng stream trên executor; kết quả bị thu hồi không được tạo yêu cầu lưu tiếp. Bản ghi đã commit trước khi dừng vẫn hợp lệ.
 
-Web dùng max_observation_gap=1.2s và confirmation_window=2.5s để chịu khoảng cách request; baseline CLI giữ cấu hình trong default.json. Cả hai giữ ba quan sát, ít nhất 0.35s bằng chứng và max_frame_age=1s. Độ trễ mạng cloud cần đo lại.
+Web dùng max_observation_gap=2.5s, confirmation_window=6s và max_frame_age=3s cho low-CPU hosting. CLI giữ timing default.json. Cả hai yêu cầu ba quan sát và ít nhất 0.35s bằng chứng. PRESENCE_CV_THREADS=1 trên cloud. Độ trễ mạng cloud cần đo sau deploy.
 
 ## Đăng ký và gallery
 
@@ -66,7 +66,7 @@ Ngày tính theo Asia/Ho_Chi_Minh từ timestamp backend. Commit tạo attendanc
 
 Download trên web dựng workbook mới từ DB theo bộ lọc, độc lập file ngày có thể đang bị Excel khóa. ID/tên được ghi kiểu text an toàn.
 
-Mặc định dữ liệu ở backend/var; PRESENCE_DATA_DIR cho phép mount ổ đĩa riêng. Test dùng thư mục riêng. Chi tiết host tại [DEPLOYMENT](DEPLOYMENT.md).
+Mặc định local ở backend/var. DATABASE_URL chọn PostgreSQL, cùng schema nghiệp vụ và unique constraint. Driver psycopg dùng BYTEA cho embedding, identity sequence cho row IDs, repeatable-read cho snapshot và transaction cho ghi. Chế độ cloud export_mode=download tạo Excel từ DB trong bộ nhớ, UI trả trạng thái available và không cần file cache. Render Free dùng Docker headless, Neon giữ dữ liệu. Test dùng DB/schema riêng. Chi tiết tại [DEPLOYMENT](DEPLOYMENT.md).
 
 ## Giới hạn hiện tại
 

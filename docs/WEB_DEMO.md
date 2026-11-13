@@ -32,7 +32,7 @@ Kiểm tra backend tại http://127.0.0.1:8000/api/health. Cài mới từ đầ
 6. Hơi quay phải và bấm **Capture sample 3**. Giữ mặt rõ, không che mắt/mũi.
 7. Nếu ảnh bị từ chối, đọc thông báo rồi chỉnh ánh sáng/khoảng cách/tư thế và chụp lại. Nút **Retake samples** xóa bộ mẫu tạm để chụp lại ba ảnh.
 8. Bấm **Review profile**, kiểm tra đúng tên, ID và đủ 3 ảnh. Bấm **Save profile**, chờ lưu hoàn tất.
-9. Modal đóng và thẻ thành viên xuất hiện: hồ sơ đã được ghi vào SQLite và gallery được nạp lại. Nếu chỉ đóng modal trước Save thì chưa tạo tài khoản.
+9. Modal đóng và thẻ thành viên xuất hiện: hồ sơ đã được ghi vào database và gallery được nạp lại. Nếu chỉ đóng modal trước Save thì chưa tạo tài khoản.
 
 Hệ thống tạo embedding bằng model pretrained đã có; thêm người không huấn luyện lại model. Luồng web lưu tên, ID,3 embedding cùng metadata; ảnh gốc không ghi ra đĩa. Không cần chuẩn bị thư mục ảnh hay sửa mã nguồn.
 
@@ -84,3 +84,9 @@ Các bài tự động dùng database riêng và ảnh công khai. Chưa có ả
 Database mặc định: backend/var/attendance.sqlite3. Excel tự động: backend/var/exports/attendance_YYYY_MM_DD.xlsx. Xóa localStorage hoặc Reset preferences chỉ đổi giao diện, không xóa hồ sơ. Restart giữ cùng thư mục dữ liệu. Không commit DB/embedding/ảnh thật lên GitHub.
 
 RGB recognition hiện chưa có liveness. Ảnh hoặc video có thể được nhận diện như người thật; không trình bày temporal confirmation là chống giả mạo.
+
+## Demo bản cloud miễn phí
+
+Làm theo DEPLOYMENT để tạo Neon trước, deploy Docker trên Render và nối Vercel. Mở web vài phút trước giờ demo, đợi dịch vụ sẵn sàng. UI tự thử lại khi backend đang thức dậy. Đăng ký/điểm danh đi cùng luồng bên trên; tốc độ cloud có thể cần giữ mặt ổn định lâu hơn laptop.
+
+Cloud dùng PostgreSQL trên Neon. Trạng thái Excel là ready to download, tải workbook từ Records/Attendance. File được dựng lại từ database theo bộ lọc. Kiểm tra persistence bằng restart backend rồi mở lại danh sách. Nhóm tự đăng ký trên database cloud mới.

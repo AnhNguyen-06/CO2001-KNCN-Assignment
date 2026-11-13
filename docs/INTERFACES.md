@@ -6,8 +6,8 @@ Browser gọi /api/* cùng origin. Next.js chuyển tiếp sang PRESENCE_BACKEND
 
 | Method và endpoint | Request | Response |
 | --- | --- | --- |
-| GET /api/health | — | status, storage, timezone, recognition |
-| GET /api/workspace | — | members[], records[], exports[] từ SQLite |
+| GET /api/health | — | status, storage, export_mode, timezone, recognition |
+| GET /api/workspace | — | members[], records[], exports[] từ database |
 | POST /api/registration/sample | JSON {image: dataURL} | accepted và quality; chưa ghi hồ sơ |
 | POST /api/members | JSON {person_id, full_name, images:[3 dataURL]} | 201, outcome created hoặc already_registered |
 | POST /api/recognition/sessions | — | token, generation |
@@ -57,3 +57,11 @@ Proxy/API giới hạn request 4 MiB, mỗi ảnh 1 MiB. Chỉ JPEG/PNG, tối �
 Kiểu thực tế nằm ở backend/presence_cv/types.py. BaselineSession.register nhận ID, tên, ba BGR images; process nhận FramePacket(generation, frame_id, captured_at, image_bgr) và optional is_current. Callback được kiểm tra trước/sau inference và trước khi ghi để loại phiên bị dừng.
 
 Một inference executor sở hữu VisionEngine. Timestamp freshness dùng clock backend; không nhận clock browser. Mỗi phiên giữ tracking riêng. SQLite unique constraint là lớp cuối chống trùng giữa mọi phiên. close của child session không đóng exporter dùng chung; root session chịu trách nhiệm flush và đóng exporter khi server dừng.
+
+## Bổ sung cloud
+
+DATABASE_URL trên backend chọn PostgreSQL, bỏ trống thì SQLite. PRESENCE_EXPORT_MODE có hai giá trị daily/download. Download mode trả exports[].status=available, Excel được dựng từ DB khi tải và retry export trả scheduled mà không tạo file local.
+
+Next proxy chuẩn hóa HTTP 502/503/504 thành BACKEND_WAKING_UP. Frontend tránh request workspace chồng nhau, tự thử lại khi visible, hiển thị hướng dẫn chờ cold start và mở lại thao tác khi kết nối thành công. Poll sau 10s khi disconnected và 15s khi ready, thao tác ghi chủ động refresh ngay.
+
+Timing web mặc định observation gap 2.5s, confirmation window 6s và max frame age 3s. Thời gian suy luận thực tế được trả ở processing_ms, frontend tiếp tục chỉ giữ một frame request đang chờ.

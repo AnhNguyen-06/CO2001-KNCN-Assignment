@@ -13,9 +13,15 @@ export async function api<T>(
 ): Promise<T> {
   const response = await fetch(`/api${path}`, {
     cache: "no-store",
+    signal: AbortSignal.timeout(28000),
     ...options,
   });
-  const payload = await response.json();
+  const payload = await response.json().catch(() => {
+    throw new ApiError(
+      "BACKEND_UNAVAILABLE",
+      "The recognition service is starting or temporarily unavailable. Please retry shortly.",
+    );
+  });
   if (!response.ok) {
     const detail = payload.detail ?? payload;
     throw new ApiError(

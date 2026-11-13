@@ -96,3 +96,11 @@ Thay local demo adapter bằng FastAPI, same-origin Next route proxy và SQLite.
 Vercel chạy Next frontend/proxy. Python chạy ở host có HTTPS và persistent volume cho SQLite/Excel, một worker. PRESENCE_BACKEND_URL và PRESENCE_BACKEND_KEY chỉ ở Next server; PRESENCE_DATA_DIR và cùng key ở Python service. Chưa triển khai remote.
 
 Bản này tạo hồ sơ nhận diện thực, chưa có password login/phân quyền hay liveness. Không coi backend key là xác thực từng người dùng. Xem [DEPLOYMENT](DEPLOYMENT.md).
+
+## D13 — Hosting miễn phí theo yêu cầu chủ dự án
+
+Chọn Vercel Hobby + Render Free + Neon Free. Bổ sung psycopg PostgreSQL bên cạnh SQLite local. DATABASE_URL chỉ đặt ở backend. Giữ ID chuỗi, embedding float32, transaction, unique ID/ngày và dữ liệu cũ của local.
+
+Render Free dùng filesystem tạm nên cloud export_mode=download dựng workbook từ DB trong bộ nhớ. Docker dùng OpenCV headless, một inference thread, model tải lúc build và process đọc PORT. Next proxy chuẩn hóa lỗi cold start; provider serialize workspace requests và tự thử lại.
+
+Cloud configuration và hướng dẫn ở DEPLOYMENT. Kết quả test được ghi vào TEST_PLAN, cần thử endpoint Render/Neon thực sau khi chủ dự án tạo dịch vụ.
