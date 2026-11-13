@@ -1,9 +1,21 @@
 from dataclasses import asdict, dataclass, field, fields
 import json
+import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from dotenv import dotenv_values
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+def backend_environment():
+    """Read local app settings without changing the parent process environment."""
+    values = {}
+    for directory in (BACKEND_ROOT.parent, BACKEND_ROOT):
+        for filename in (".env", ".env.local"):
+            values.update(dotenv_values(directory / filename))
+    return {**values, **os.environ}
 
 
 @dataclass(frozen=True)

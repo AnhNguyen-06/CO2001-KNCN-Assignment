@@ -2,7 +2,6 @@ import argparse
 from dataclasses import asdict
 from datetime import date as Date
 import json
-import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -13,7 +12,7 @@ import numpy as np
 import psycopg
 
 from .camera import LatestFrames
-from .config import Config, Paths
+from .config import Config, Paths, backend_environment
 from .display import annotate, window_open
 from .export import ExcelExporter
 from .models import download_models, verify_models
@@ -42,12 +41,15 @@ def parse_date(value):
 
 
 def parser():
+    environment = backend_environment()
     root = argparse.ArgumentParser(
         description="Presence standalone YuNet/SFace attendance baseline"
     )
     root.add_argument("--config", type=Path, help="Configuration JSON path")
     root.add_argument(
-        "--data-dir", type=Path, default=Path(os.environ.get("PRESENCE_DATA_DIR", Paths().data_dir))
+        "--data-dir",
+        type=Path,
+        default=Path(environment.get("PRESENCE_DATA_DIR", Paths().data_dir)),
     )
     root.add_argument("--model-dir", type=Path, default=Paths().model_dir)
     commands = root.add_subparsers(dest="command", required=True)
@@ -199,7 +201,7 @@ def main(argv=None):
         paths = Paths(
             arguments.model_dir.resolve(),
             arguments.data_dir.resolve(),
-            database_url=os.environ.get("DATABASE_URL", "").strip() or None,
+            database_url=backend_environment().get("DATABASE_URL", "").strip() or None,
         )
         if arguments.command == "setup-models":
             emit(

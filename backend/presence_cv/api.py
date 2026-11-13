@@ -22,7 +22,7 @@ import numpy as np
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, ValidationError
 
-from .config import Config, Paths
+from .config import Config, Paths, backend_environment
 from .export import attendance_workbook
 from .session import BaselineSession
 from .types import BaselineError, FramePacket
@@ -218,18 +218,21 @@ class WebRuntime:
 
 
 def create_app(config: Config | None = None, paths: Paths | None = None):
+    environment = backend_environment()
     config = config or replace(
         Config.load(),
         max_observation_gap=2.5,
         confirmation_window=6.0,
         max_frame_age=3.0,
-        opencv_threads=int(os.environ.get("PRESENCE_CV_THREADS", "4")),
+        opencv_threads=int(environment.get("PRESENCE_CV_THREADS", "4")),
     )
-    database_url = os.environ.get("DATABASE_URL", "").strip() or None
+    database_url = environment.get("DATABASE_URL", "").strip() or None
     paths = paths or Paths(
-        data_dir=Path(os.environ.get("PRESENCE_DATA_DIR", str(Paths().data_dir))).resolve(),
+        data_dir=Path(environment.get("PRESENCE_DATA_DIR", str(Paths().data_dir))).resolve(),
         database_url=database_url,
-        export_mode=os.environ.get("PRESENCE_EXPORT_MODE", "download" if database_url else "daily"),
+        export_mode=environment.get(
+            "PRESENCE_EXPORT_MODE", "download" if database_url else "daily"
+        ),
     )
 
     @asynccontextmanager
@@ -246,7 +249,7 @@ def create_app(config: Config | None = None, paths: Paths | None = None):
 
     @app.middleware("http")
     async def private_backend(request: Request, call_next):
-        key = os.environ.get("PRESENCE_BACKEND_KEY", "")
+        key = os.environ.get("PRESENCE_BACKEND_KEY", environment.get("PRESENCE_BACKEND_KEY", ""))
         if (
             key
             and request.url.path != "/api/health"

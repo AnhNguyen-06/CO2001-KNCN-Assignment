@@ -17,3 +17,5 @@ frontend/.next/
 frontend/test-results/
 frontend/playwright-report/
 *.tsbuildinfo
+.neon
+node_modules/

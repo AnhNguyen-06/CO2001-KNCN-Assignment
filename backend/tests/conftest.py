@@ -8,6 +8,13 @@ from presence_cv.storage import Repository
 from presence_cv.types import Quality, Sample
 
 
+@pytest.fixture(autouse=True)
+def isolate_application_database(monkeypatch):
+    # CLI subprocesses must not use a developer's .env database during tests.
+    # Windows can omit empty environment variables in child processes.
+    monkeypatch.setenv("DATABASE_URL", " ")
+
+
 @pytest.fixture
 def config():
     return Config()

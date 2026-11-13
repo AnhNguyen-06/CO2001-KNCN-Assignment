@@ -46,7 +46,7 @@ export default defineConfig({
             env: {
               PRESENCE_DATA_DIR: dataDir,
               PRESENCE_BACKEND_KEY: "",
-              DATABASE_URL: "",
+              DATABASE_URL: " ",
               PRESENCE_EXPORT_MODE: "daily",
             },
           },
